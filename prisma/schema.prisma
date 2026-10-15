@@ -1,0 +1,183 @@
+// Schema dati target del portale B2B Valkiria Fluidodinamica S.r.l. (azienda fittizia).
+// Documentazione architetturale: nella sandbox pubblica i dati vivono in memoria,
+// in produzione questo schema è applicato a PostgreSQL 16 tramite Prisma Migrate.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BUYER
+  TIER1
+  AGENT
+  ADMIN
+}
+
+enum ContractTier {
+  OFFERTA_BASE
+  CONTRATTO_QUADRO
+}
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  PAID
+  INVOICED
+  CANCELLED
+}
+
+enum VatRegime {
+  ORDINARIA
+  ESENTE_ART8
+}
+
+enum WebhookOutcome {
+  PROCESSED
+  DUPLICATE_IGNORED
+  SIGNATURE_INVALID
+}
+
+model Company {
+  id                         String        @id @default(cuid())
+  legalName                  String
+  vatNumber                  String        @unique @db.VarChar(13)
+  sdiRecipientCode           String        @db.Char(7)
+  pec                        String
+  priceListTierId            String
+  priceListTier              PriceListTier @relation(fields: [priceListTierId], references: [id])
+  freeShippingThresholdCents Int
+  intentDeclarationProtocol  String?       @db.VarChar(32)
+  stripeCustomerId           String?       @unique
+  users                      User[]
+  orders                     B2BOrder[]
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  @@index([priceListTierId])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  fullName  String
+  role      Role
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  orders    B2BOrder[]
+  createdAt DateTime @default(now())
+
+  @@index([companyId, role])
+}
+
+model PriceListTier {
+  id                 String       @id @default(cuid())
+  tier               ContractTier @unique
+  contractCode       String       @unique
+  contractDiscountBp Int
+  /// Scaglioni volume serializzati: [{ minQty, maxQty, discountBp }]
+  volumeTiers        Json
+  validFrom          DateTime
+  validTo            DateTime?
+  companies          Company[]
+}
+
+model Product {
+  sku                 String      @id @db.VarChar(32)
+  name                String
+  category            String
+  maxPressureBar      Int
+  flowLpm             Int?
+  tempMinC            Int
+  tempMaxC            Int
+  weightGrams         Int
+  listPriceCents      Int
+  industrialCostCents Int
+  leadTimeDays        Int
+  stockBergamo        Int         @default(0)
+  stockBrescia        Int         @default(0)
+  /// Optimistic locking: ogni decremento giacenza incrementa la versione.
+  version             Int         @default(0)
+  orderLines          OrderLine[]
+  updatedAt           DateTime    @updatedAt
+
+  @@index([category])
+}
+
+model B2BOrder {
+  id              String      @id @default(cuid())
+  orderCode       String      @unique
+  /// Chiave di idempotenza inviata dal client: impedisce doppie emissioni.
+  idempotencyKey  String      @unique
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id])
+  createdById     String
+  createdBy       User        @relation(fields: [createdById], references: [id])
+  status          OrderStatus @default(SUBMITTED)
+  vatRegime       VatRegime
+  paymentMethod   String
+  taxableCents    Int
+  shippingCents   Int
+  vatCents        Int
+  stampDutyCents  Int         @default(0)
+  totalCents      Int
+  stripeSessionId String?     @unique
+  invoiceNumber   String?     @unique
+  sdiIdentifier   String?
+  lines           OrderLine[]
+  webhookLogs     WebhookLog[]
+  createdAt       DateTime    @default(now())
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+model OrderLine {
+  id                 String   @id @default(cuid())
+  orderId            String
+  order              B2BOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sku                String
+  product            Product  @relation(fields: [sku], references: [sku])
+  quantity           Int
+  listUnitCents      Int
+  netUnitCents       Int
+  volumeTierLabel    String
+  overrideDiscountBp Int      @default(0)
+  lineNetCents       Int
+  fromBergamo        Int
+  fromBrescia        Int
+  backorder          Int
+
+  @@unique([orderId, sku])
+  @@index([sku])
+}
+
+/// Ogni consegna (anche duplicata o con firma non valida) viene registrata.
+model WebhookLog {
+  id                String         @id @default(cuid())
+  stripeEventId     String
+  type              String
+  orderId           String?
+  order             B2BOrder?      @relation(fields: [orderId], references: [id])
+  signatureVerified Boolean
+  outcome           WebhookOutcome
+  payload           Json
+  receivedAt        DateTime       @default(now())
+
+  @@index([stripeEventId])
+  @@index([orderId])
+  @@index([type, receivedAt(sort: Desc)])
+}
+
+/// Deduplica: un evento Stripe produce effetti di dominio al più una volta.
+/// L'INSERT avviene nella stessa transazione dell'effetto; la violazione della
+/// chiave primaria segnala un duplicato → risposta 200 con outcome DUPLICATE_IGNORED.
+model ProcessedStripeEvent {
+  eventId     String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
