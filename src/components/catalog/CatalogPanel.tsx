@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { Fragment, useId, useMemo, useState } from "react";
 import { Minus, Plus, Search } from "lucide-react";
-import type { AvailabilityFilter, PriceListTier, Product, ProductCategory } from "@/types";
+import type { AvailabilityFilter, PriceListTier, Product, ProductCategory, StockMap } from "@/types";
 import { CATEGORIES, PRODUCTS } from "@/data/catalog";
 import { PRICE_LIST_TIERS } from "@/data/companies";
 import { formatBp, formatEUR } from "@/lib/money";
@@ -19,26 +19,26 @@ const AVAILABILITY_OPTIONS: ReadonlyArray<{ id: AvailabilityFilter; label: strin
 
 const nf = new Intl.NumberFormat("it-IT");
 
-function TierChips({ tier, quantity }: { tier: PriceListTier; quantity: number }) {
+type Quote = ReturnType<typeof quote>;
+
+/** Scaglioni quantità in una riga di testo: lo scaglione attivo è evidenziato. */
+function TierLine({ tier, quantity }: { tier: PriceListTier; quantity: number }) {
   const q = Math.max(1, quantity);
   return (
-    <div className="flex gap-0.5" aria-label="Scaglioni quantità">
-      {tier.volumeTiers.map((t) => {
+    <p className="num text-xs text-dim" aria-label="Scaglioni quantità">
+      {tier.volumeTiers.map((t, i) => {
         const active = q >= t.minQty && (t.maxQty === null || q <= t.maxQty);
         return (
-          <span
-            key={t.id}
-            aria-current={active ? "true" : undefined}
-            className={`num whitespace-nowrap rounded-[2px] border px-1 py-px text-[10px] leading-tight ${
-              active ? "border-amber bg-amber/15 text-amber-soft" : "border-line text-dim"
-            }`}
-          >
-            {t.label}
-            {t.discountBp > 0 ? ` −${formatBp(t.discountBp)}` : ""}
-          </span>
+          <Fragment key={t.id}>
+            {i > 0 && <span aria-hidden> · </span>}
+            <span aria-current={active ? "true" : undefined} className={active ? "font-medium text-fg" : undefined}>
+              {t.label}
+              {t.discountBp > 0 ? ` −${formatBp(t.discountBp)}` : ""}
+            </span>
+          </Fragment>
         );
       })}
-    </div>
+    </p>
   );
 }
 
@@ -48,7 +48,7 @@ function QtyStepper({ product, disabledReason }: { product: Product; disabledRea
   const inputId = useId();
   const disabled = disabledReason !== null;
   const btn =
-    "flex size-7 items-center justify-center rounded-[2px] border border-line-strong text-muted hover:border-amber hover:text-amber disabled:cursor-not-allowed disabled:opacity-40";
+    "flex size-11 shrink-0 items-center justify-center rounded border border-line-strong bg-panel text-muted hover:border-fg hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 lg:size-8";
   return (
     <div className="flex items-center gap-1" title={disabledReason ?? undefined}>
       <button
@@ -58,10 +58,10 @@ function QtyStepper({ product, disabledReason }: { product: Product; disabledRea
         onClick={() => setQty(product.sku, qty - 1)}
         aria-label={`Riduci quantità ${product.sku}`}
       >
-        <Minus aria-hidden className="size-3" />
+        <Minus aria-hidden className="size-4 lg:size-3.5" />
       </button>
       <label htmlFor={inputId} className="sr-only">
-        Quantità ordine rapido {product.sku}
+        Quantità {product.sku}
       </label>
       <input
         id={inputId}
@@ -73,8 +73,8 @@ function QtyStepper({ product, disabledReason }: { product: Product; disabledRea
         placeholder="0"
         disabled={disabled}
         onChange={(e) => setQty(product.sku, e.target.value === "" ? 0 : Number(e.target.value))}
-        className={`num h-7 w-16 rounded-[2px] border bg-ink px-1.5 text-right text-xs text-fg disabled:opacity-40 ${
-          qty > 0 ? "border-amber/70" : "border-line-strong"
+        className={`num h-11 w-16 rounded border bg-panel px-2 text-center text-base text-fg placeholder:text-dim disabled:opacity-40 lg:h-8 lg:text-sm ${
+          qty > 0 ? "border-fg" : "border-line-strong"
         }`}
       />
       <button
@@ -84,7 +84,7 @@ function QtyStepper({ product, disabledReason }: { product: Product; disabledRea
         onClick={() => setQty(product.sku, qty + 1)}
         aria-label={`Aumenta quantità ${product.sku}`}
       >
-        <Plus aria-hidden className="size-3" />
+        <Plus aria-hidden className="size-4 lg:size-3.5" />
       </button>
     </div>
   );
@@ -95,12 +95,13 @@ function OverrideInput({ product, tier, quantity }: { product: Product; tier: Pr
   const bp = overrideFor(product.sku);
   const inputId = useId();
   const validation = bp > 0 ? validateOverride(product, tier, Math.max(1, quantity), bp) : null;
+  const invalid = validation !== null && !validation.valid;
   return (
     <div className="flex flex-col gap-0.5">
-      <label htmlFor={inputId} className="sr-only">
-        Sconto extra agente su {product.sku} (percentuale)
-      </label>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
+        <label htmlFor={inputId} className="text-xs text-dim lg:sr-only">
+          Sconto extra {product.sku}
+        </label>
         <input
           id={inputId}
           type="number"
@@ -110,19 +111,47 @@ function OverrideInput({ product, tier, quantity }: { product: Product; tier: Pr
           value={bp === 0 ? "" : bp / 100}
           placeholder="0"
           onChange={(e) => setOverride(product.sku, Math.round(Number(e.target.value || 0) * 100))}
-          aria-invalid={validation !== null && !validation.valid}
+          aria-invalid={invalid}
           aria-describedby={`${inputId}-msg`}
-          className={`num h-7 w-14 rounded-[2px] border bg-ink px-1.5 text-right text-xs text-fg ${
-            validation && !validation.valid ? "border-danger" : bp > 0 ? "border-info" : "border-line-strong"
+          className={`num h-10 w-20 rounded border bg-panel px-2 text-right text-base text-fg lg:h-8 lg:w-16 lg:text-sm ${
+            invalid ? "border-danger" : bp > 0 ? "border-info" : "border-line-strong"
           }`}
         />
-        <span className="text-[10px] text-dim">%</span>
+        <span className="text-xs text-dim">%</span>
       </div>
-      <span id={`${inputId}-msg`} className={`max-w-[9rem] text-[10px] leading-tight ${validation && !validation.valid ? "text-danger" : "text-dim"}`}>
-        {validation && !validation.valid ? validation.reason : validation?.valid ? "Override applicato" : `max ${MAX_OVERRIDE_BP / 100}% · margine ≥ ${MIN_MARGIN_BP / 100}%`}
+      <span id={`${inputId}-msg`} className={`max-w-[12rem] text-xs leading-snug ${invalid ? "text-danger" : "text-dim"}`}>
+        {validation && !validation.valid ? validation.reason : validation?.valid ? "Applicato" : `max ${MAX_OVERRIDE_BP / 100}% · margine ≥ ${MIN_MARGIN_BP / 100}%`}
       </span>
     </div>
   );
+}
+
+function discountLabel(q: Quote): string {
+  return `−${formatBp(10_000 - Math.round((q.netUnitCents * 10_000) / q.listUnitCents))}`;
+}
+
+function Availability({ product, stock, qty }: { product: Product; stock: StockMap[string] | undefined; qty: number }) {
+  const s = stock ?? { BG: 0, BS: 0 };
+  const total = s.BG + s.BS;
+  const shortage = qty > total;
+  return (
+    <div className="text-xs leading-snug">
+      <p className={`flex items-center gap-1.5 font-medium ${total > 0 ? "text-ok" : "text-warn"}`}>
+        <span aria-hidden className={`size-2 rounded-full ${total > 0 ? "bg-ok" : "bg-warn"}`} />
+        {total > 0 ? "Pronta consegna" : `Su ordinazione · ${product.leadTimeDays} gg`}
+      </p>
+      <p className="num text-dim">
+        BG {nf.format(s.BG)} · BS {nf.format(s.BS)}
+      </p>
+      {shortage && total > 0 && <p className="text-warn">Residuo in backorder · {product.leadTimeDays} gg</p>}
+    </div>
+  );
+}
+
+function specLine(p: Product): string {
+  return [`${p.maxPressureBar} bar`, p.flowLpm === null ? null : `${p.flowLpm} L/min`, `${p.tempMinC}…${p.tempMaxC} °C`, `${nf.format(p.weightKg)} kg`]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function CatalogPanel() {
@@ -151,46 +180,63 @@ export function CatalogPanel() {
     });
   }, [search, category, availability, state.stock]);
 
-  const th = "px-2.5 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-dim whitespace-nowrap";
-  const td = "px-2.5 py-2 align-top";
+  const priced = rows.map((p) => {
+    const qty = state.cart[p.sku] ?? 0;
+    const q = quote(p, tier, Math.max(1, qty), activeOverrides[overrideKey(company.id, p.sku)] ?? 0);
+    return { p, qty, q };
+  });
+
+  const volumeDiscounts = tier.volumeTiers
+    .filter((t) => t.discountBp > 0)
+    .map((t) => `${t.label} −${formatBp(t.discountBp)}`)
+    .join(", ");
+
+  const th = "px-3 py-2.5 text-left text-xs font-medium text-dim whitespace-nowrap";
+  const td = "px-3 py-3 align-top";
+
+  const resetFilters = () => {
+    setSearch("");
+    setCategory("all");
+    setAvailability("all");
+  };
 
   return (
-    <section aria-labelledby="catalog-title" className="min-w-0 rounded-sm border border-line bg-panel">
-      <div className="flex flex-col gap-3 border-b border-line p-3 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h2 id="catalog-title" className="text-sm font-semibold text-fg">
-            Catalogo tecnico · ordine rapido
+    <section aria-labelledby="catalog-title" className="min-w-0 rounded-md border border-line bg-panel">
+      <div className="border-b border-line p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="catalog-title" className="text-lg font-semibold tracking-tight text-fg">
+            Catalogo
           </h2>
-          <p className="text-xs text-muted">
-            {rows.length} di {PRODUCTS.length} componenti · prezzi netti {tier.label} per {company.vatNumber}
+          <p className="text-[13px] text-dim">
+            Listino <span className="text-muted">{tier.label}</span> (−{formatBp(tier.contractDiscountBp)}) · quantità {volumeDiscounts} · trasporto
+            gratuito da <span className="num">{formatEUR(company.freeShippingThresholdCents)}</span>
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="flex flex-col gap-1">
-            <label htmlFor={searchId} className="text-[10px] uppercase tracking-wider text-dim">
-              Ricerca SKU / descrizione
+
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="relative">
+            <label htmlFor={searchId} className="sr-only">
+              Cerca per codice o descrizione
             </label>
-            <div className="relative">
-              <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-dim" />
-              <input
-                id={searchId}
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="es. CETOP, VLK-PPA, 350 bar"
-                className="num h-8 w-full rounded-sm border border-line-strong bg-ink pl-7 pr-2 text-xs text-fg placeholder:text-dim sm:w-56"
-              />
-            </div>
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-dim" />
+            <input
+              id={searchId}
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cerca codice o descrizione (es. CETOP)"
+              className="h-11 w-full rounded border border-line-strong bg-panel pl-9 pr-3 text-base text-fg placeholder:text-dim sm:h-9 sm:text-sm"
+            />
           </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor={categoryId} className="text-[10px] uppercase tracking-wider text-dim">
+          <div>
+            <label htmlFor={categoryId} className="sr-only">
               Categoria
             </label>
             <select
               id={categoryId}
               value={category}
               onChange={(e) => setCategory(e.target.value as ProductCategory | "all")}
-              className="h-8 rounded-sm border border-line-strong bg-ink px-2 text-xs text-fg"
+              className="h-11 w-full rounded border border-line-strong bg-panel px-2.5 text-base text-fg sm:h-9 sm:w-auto sm:text-sm"
             >
               <option value="all">Tutte le categorie</option>
               {CATEGORIES.map((c) => (
@@ -200,132 +246,175 @@ export function CatalogPanel() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
-            <span id="availability-label" className="text-[10px] uppercase tracking-wider text-dim">
-              Disponibilità
-            </span>
-            <div role="group" aria-labelledby="availability-label" className="flex rounded-sm border border-line-strong bg-ink p-0.5">
-              {AVAILABILITY_OPTIONS.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  aria-pressed={availability === o.id}
-                  onClick={() => setAvailability(o.id)}
-                  className={`h-7 whitespace-nowrap rounded-[2px] px-2.5 text-xs ${
-                    availability === o.id ? "bg-panel-2 text-fg ring-1 ring-line-strong" : "text-muted hover:text-fg"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+          <div
+            role="group"
+            aria-label="Disponibilità"
+            className="grid grid-cols-3 rounded border border-line-strong bg-panel-2 p-0.5 sm:col-span-2 sm:flex lg:col-span-1"
+          >
+            {AVAILABILITY_OPTIONS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={availability === o.id}
+                onClick={() => setAvailability(o.id)}
+                className={`h-10 whitespace-nowrap rounded-[3px] px-3 text-sm sm:h-8 ${
+                  availability === o.id ? "bg-panel font-medium text-fg shadow-sm ring-1 ring-line-strong" : "text-muted hover:text-fg"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
           </div>
         </div>
+        <p className="mt-2 text-xs text-dim">
+          <span className="num">{rows.length}</span> di <span className="num">{PRODUCTS.length}</span> articoli · prezzi netti IVA esclusa
+          {qtyDisabledReason && <span className="text-warn"> · sola consultazione per questo ruolo</span>}
+        </p>
       </div>
 
-      <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[1080px] border-collapse text-xs">
-          <caption className="sr-only">
-            Catalogo componenti oleodinamici con specifiche tecniche, giacenze e prezzi per il ruolo attivo
-          </caption>
-          <thead className="border-b border-line bg-panel-2">
-            <tr>
-              <th scope="col" className={`${th} sticky left-0 z-10 bg-panel-2`}>
-                Articolo
-              </th>
-              <th scope="col" className={`${th} text-right`}>
-                P max
-              </th>
-              <th scope="col" className={`${th} text-right`}>
-                Portata
-              </th>
-              <th scope="col" className={th}>
-                T esercizio
-              </th>
-              <th scope="col" className={`${th} text-right`}>
-                Peso
-              </th>
-              <th scope="col" className={`${th} text-right`}>
-                Giacenza BG · BS
-              </th>
-              <th scope="col" className={`${th} text-right`}>
-                Listino / Netto
-              </th>
-              {showCost && (
-                <th scope="col" className={`${th} text-right text-info-soft`}>
-                  Costo ind.
-                </th>
+      {rows.length === 0 && (
+        <div className="px-4 py-12 text-center">
+          <p className="text-sm text-fg">Nessun articolo trovato.</p>
+          <button type="button" onClick={resetFilters} className="mt-2 text-sm font-medium text-info underline-offset-2 hover:underline">
+            Azzera filtri
+          </button>
+        </div>
+      )}
+
+      {/* Mobile e tablet: lista a schede */}
+      <ul className="divide-y divide-line lg:hidden">
+        {priced.map(({ p, qty, q }) => (
+          <li key={p.sku} className="px-3 py-3.5 sm:px-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="mono text-xs font-medium text-amber">{p.sku}</p>
+                <p className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{p.name}</p>
+                <p className="num mt-1 text-[13px] text-muted">{specLine(p)}</p>
+              </div>
+            </div>
+            <div className="mt-2">
+              <Availability product={p} stock={state.stock[p.sku]} qty={qty} />
+            </div>
+
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="num text-lg font-semibold leading-tight text-fg">{formatEUR(q.netUnitCents)}</p>
+                <p className="num text-xs text-dim">
+                  <span className="line-through">{formatEUR(q.listUnitCents)}</span> <span className="text-ok">{discountLabel(q)}</span>
+                </p>
+              </div>
+              <QtyStepper product={p} disabledReason={qtyDisabledReason} />
+            </div>
+
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <TierLine tier={tier} quantity={qty} />
+              {qty > 0 && (
+                <p className="num shrink-0 text-sm font-medium text-fg">
+                  <span className="sr-only">Totale riga </span>
+                  {formatEUR(q.lineNetCents)}
+                </p>
               )}
-              {showMargin && (
-                <th scope="col" className={`${th} text-right text-info-soft`}>
-                  Margine · Provv.
+            </div>
+
+            {(showCost || showMargin || canOverride) && (
+              <div className="mt-3 grid gap-2 rounded border border-info/25 bg-info/[0.04] p-2.5 text-xs">
+                {(showCost || showMargin) && (
+                  <p className="num text-muted">
+                    {showCost && <>Costo {formatEUR(q.costUnitCents)}</>}
+                    {showMargin && (
+                      <>
+                        {showCost && " · "}Margine{" "}
+                        <span className={q.marginBp < MIN_MARGIN_BP ? "text-danger" : q.marginBp < 3_500 ? "text-warn" : "text-ok"}>
+                          {formatBp(q.marginBp)}
+                        </span>{" "}
+                        · Provv. {formatBp(q.commissionRateBp)} ({formatEUR(q.commissionCents)})
+                      </>
+                    )}
+                  </p>
+                )}
+                {canOverride && <OverrideInput product={p} tier={tier} quantity={qty} />}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {/* Desktop: tabella densa */}
+      {rows.length > 0 && (
+        <div className="scrollbar-thin hidden overflow-x-auto lg:block">
+          <table className="w-full border-collapse text-sm">
+            <caption className="sr-only">Catalogo componenti oleodinamici con specifiche, giacenze e prezzi per il ruolo attivo</caption>
+            <thead className="border-b border-line bg-panel-2">
+              <tr>
+                <th scope="col" className={th}>
+                  Articolo
                 </th>
-              )}
-              {canOverride && (
-                <th scope="col" className={`${th} text-info-soft`}>
-                  Override
+                <th scope="col" className={th}>
+                  Specifiche
                 </th>
-              )}
-              <th scope="col" className={th}>
-                Quantità · scaglione
-              </th>
-              <th scope="col" className={`${th} text-right`}>
-                Netto riga
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => {
-              const qty = state.cart[p.sku] ?? 0;
-              const q = quote(p, tier, Math.max(1, qty), activeOverrides[overrideKey(company.id, p.sku)] ?? 0);
-              const stock = state.stock[p.sku] ?? { BG: 0, BS: 0 };
-              const total = stock.BG + stock.BS;
-              const shortage = qty > total;
-              return (
-                <tr key={p.sku} className="group border-b border-line/70 hover:bg-panel-2/60">
-                  <th scope="row" className={`${td} sticky left-0 z-10 w-[19rem] max-w-[19rem] bg-panel text-left font-normal group-hover:bg-[#14161e]`}>
-                    <span className="num block text-[11px] font-medium text-amber">{p.sku}</span>
-                    <span className="block text-[12.5px] leading-snug text-fg">{p.name}</span>
-                    <span className="mt-0.5 block text-[10.5px] text-dim">
-                      {p.category} · {p.certifications.join(" · ")}
+                <th scope="col" className={th}>
+                  Disponibilità
+                </th>
+                <th scope="col" className={`${th} text-right`}>
+                  Prezzo netto
+                </th>
+                {showCost && (
+                  <th scope="col" className={`${th} text-right`}>
+                    Costo
+                  </th>
+                )}
+                {showMargin && (
+                  <th scope="col" className={`${th} text-right`}>
+                    Margine · provv.
+                  </th>
+                )}
+                {canOverride && (
+                  <th scope="col" className={th}>
+                    Sconto extra
+                  </th>
+                )}
+                <th scope="col" className={th}>
+                  Quantità
+                </th>
+                <th scope="col" className={`${th} text-right`}>
+                  Totale
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {priced.map(({ p, qty, q }) => (
+                <tr key={p.sku} className={`border-b border-line last:border-b-0 hover:bg-panel-2/70 ${qty > 0 ? "bg-amber/[0.03]" : ""}`}>
+                  <th scope="row" className={`${td} min-w-[16rem] max-w-[22rem] text-left font-normal`}>
+                    <span className="mono block text-xs font-medium text-amber">{p.sku}</span>
+                    <span className="block font-medium leading-snug text-fg">{p.name}</span>
+                    <span className="mt-0.5 block text-xs text-dim">
+                      {p.category} · {p.certifications.join(", ")}
                     </span>
                   </th>
-                  <td className={`${td} num text-right text-fg`}>
-                    {p.maxPressureBar}
-                    <span className="text-dim"> bar</span>
-                  </td>
-                  <td className={`${td} num text-right text-fg`}>
-                    {p.flowLpm === null ? <span className="text-dim">—</span> : <>{p.flowLpm}<span className="text-dim"> L/min</span></>}
-                  </td>
-                  <td className={`${td} num whitespace-nowrap text-muted`}>
-                    {p.tempMinC}…{p.tempMaxC} °C
-                  </td>
-                  <td className={`${td} num text-right text-muted`}>{nf.format(p.weightKg)} kg</td>
-                  <td className={`${td} num whitespace-nowrap text-right`}>
-                    <span className={stock.BG > 0 ? "text-fg" : "text-dim"}>{nf.format(stock.BG)}</span>
-                    <span className="text-dim"> · </span>
-                    <span className={stock.BS > 0 ? "text-fg" : "text-dim"}>{nf.format(stock.BS)}</span>
-                    <span className={`mt-0.5 block text-[10px] ${total > 0 ? "text-ok" : "text-warn"}`}>
-                      {total > 0 ? "Pronta consegna" : `Su ordinazione · ${p.leadTimeDays} gg lav.`}
+                  <td className={`${td} num whitespace-nowrap text-[13px] text-muted`}>
+                    <span className="block">
+                      {p.maxPressureBar} bar{p.flowLpm !== null && <> · {p.flowLpm} L/min</>}
                     </span>
-                    {shortage && total > 0 && (
-                      <span className="block text-[10px] text-warn">Residuo in backorder · {p.leadTimeDays} gg</span>
-                    )}
-                  </td>
-                  <td className={`${td} num whitespace-nowrap text-right`}>
-                    <span className="block text-[11px] text-dim line-through decoration-dim/70">{formatEUR(q.listUnitCents)}</span>
-                    <span className="block font-medium text-fg">{formatEUR(q.netUnitCents)}</span>
-                    <span className="block text-[10px] text-ok">
-                      −{formatBp(10_000 - Math.round((q.netUnitCents * 10_000) / q.listUnitCents))}
+                    <span className="block text-dim">
+                      {p.tempMinC}…{p.tempMaxC} °C · {nf.format(p.weightKg)} kg
                     </span>
                   </td>
-                  {showCost && <td className={`${td} num text-right text-info-soft`}>{formatEUR(q.costUnitCents)}</td>}
+                  <td className={`${td} whitespace-nowrap`}>
+                    <Availability product={p} stock={state.stock[p.sku]} qty={qty} />
+                  </td>
+                  <td className={`${td} num whitespace-nowrap text-right`}>
+                    <span className="block font-semibold text-fg">{formatEUR(q.netUnitCents)}</span>
+                    <span className="block text-xs text-dim">
+                      <span className="line-through">{formatEUR(q.listUnitCents)}</span> <span className="text-ok">{discountLabel(q)}</span>
+                    </span>
+                  </td>
+                  {showCost && <td className={`${td} num whitespace-nowrap text-right text-muted`}>{formatEUR(q.costUnitCents)}</td>}
                   {showMargin && (
                     <td className={`${td} num whitespace-nowrap text-right`}>
-                      <span className={`block ${q.marginBp < MIN_MARGIN_BP ? "text-danger" : q.marginBp < 3_500 ? "text-warn" : "text-ok"}`}>
+                      <span className={`block font-medium ${q.marginBp < MIN_MARGIN_BP ? "text-danger" : q.marginBp < 3_500 ? "text-warn" : "text-ok"}`}>
                         {formatBp(q.marginBp)}
                       </span>
-                      <span className="block text-[10px] text-muted">
+                      <span className="block text-xs text-dim">
                         {formatBp(q.commissionRateBp)} · {formatEUR(q.commissionCents)}
                       </span>
                     </td>
@@ -336,34 +425,27 @@ export function CatalogPanel() {
                     </td>
                   )}
                   <td className={td}>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1.5">
                       <QtyStepper product={p} disabledReason={qtyDisabledReason} />
-                      <TierChips tier={tier} quantity={qty} />
+                      <TierLine tier={tier} quantity={qty} />
                     </div>
                   </td>
                   <td className={`${td} num whitespace-nowrap text-right`}>
                     {qty > 0 ? (
                       <>
-                        <span className="block font-medium text-fg">{formatEUR(q.lineNetCents)}</span>
-                        <span className="block text-[10px] text-ok">risparmio {formatEUR(q.savingsCents)}</span>
+                        <span className="block font-semibold text-fg">{formatEUR(q.lineNetCents)}</span>
+                        <span className="block text-xs text-ok">−{formatEUR(q.savingsCents)}</span>
                       </>
                     ) : (
                       <span className="text-dim">—</span>
                     )}
                   </td>
                 </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={12} className="px-3 py-10 text-center text-sm text-muted">
-                  Nessun componente corrisponde ai filtri impostati.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

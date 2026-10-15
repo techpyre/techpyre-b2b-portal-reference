@@ -1,77 +1,112 @@
 "use client";
 
-import { Factory, Warehouse } from "lucide-react";
-import { PRICE_LIST_TIERS, SUPPLIER } from "@/data/companies";
-import { formatBp, formatEUR } from "@/lib/money";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { CompanyId } from "@/types";
+import { COMPANIES, PRICE_LIST_TIERS } from "@/data/companies";
 import { ROLES } from "@/lib/rbac";
 import { usePortal } from "@/components/PortalProvider";
 
 function ValkiriaLogo() {
   return (
-    <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true" className="shrink-0">
-      <rect x="0.5" y="0.5" width="39" height="39" rx="3" fill="#11131A" stroke="#2E3345" />
-      <path d="M8 10h6l6 15 6-15h6L23 31h-6L8 10z" fill="#F97316" />
-      <circle cx="20" cy="20" r="2.2" fill="#090A0F" />
-      <path d="M6 34h28" stroke="#3B82F6" strokeWidth="1.5" />
+    <svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true" className="shrink-0">
+      <rect width="40" height="40" rx="4" fill="#14181F" />
+      <path d="M8 10h6l6 15 6-15h6L23 31h-6L8 10z" fill="#EA580C" />
     </svg>
   );
 }
 
-/** Header aziendale Valkiria (il «prodotto» demo) con anagrafica del cliente attivo. */
-export function CompanyHeader() {
-  const { role, company } = usePortal();
+const PRIMARY_NAV = [
+  { href: "/", label: "Catalogo" },
+  { href: "/ordini", label: "Ordini e fatture" },
+] as const;
+
+const SECONDARY_NAV = [
+  { href: "/permessi", label: "Permessi" },
+  { href: "/architettura", label: "Architettura e API" },
+] as const;
+
+function CustomerSwitch() {
+  const { role, company, setCompany } = usePortal();
   const tier = PRICE_LIST_TIERS[company.priceListTier];
+  const canSwitch = ROLES[role].canSwitchCompany;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-sm">
+      <span className="shrink-0 text-dim">{canSwitch ? "Ordina per" : "Cliente"}</span>
+      {canSwitch ? (
+        <>
+          <label htmlFor="company-select" className="sr-only">
+            Cliente per cui ordinare
+          </label>
+          <select
+            id="company-select"
+            value={company.id}
+            onChange={(e) => setCompany(e.target.value as CompanyId)}
+            className="h-9 min-w-0 max-w-full flex-1 truncate rounded border border-line-strong bg-panel px-2 text-base font-medium text-fg sm:h-8 sm:max-w-[18rem] sm:text-sm"
+          >
+            {(Object.keys(COMPANIES) as CompanyId[]).map((id) => (
+              <option key={id} value={id}>
+                {COMPANIES[id].legalName}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : (
+        <span className="truncate font-medium text-fg" title={`${company.legalName} · ${company.vatNumber}`}>
+          {company.legalName}
+        </span>
+      )}
+      <span className="hidden shrink-0 text-dim lg:inline">
+        · <span className="num">{company.vatNumber}</span> · {tier.label}
+      </span>
+    </div>
+  );
+}
+
+/** Header aziendale Valkiria (il «prodotto» demo): marchio, cliente attivo, navigazione. */
+export function CompanyHeader() {
+  const pathname = usePathname();
+  const { state } = usePortal();
+  const orders = state.orders.length;
+
+  const linkClass = (href: string, secondary = false) => {
+    const active = pathname === href;
+    return `relative -mb-px flex h-11 shrink-0 items-center gap-1.5 border-b-2 px-1 whitespace-nowrap ${
+      active ? "border-amber font-medium text-fg" : `border-transparent hover:text-fg ${secondary ? "text-dim" : "text-muted"}`
+    }`;
+  };
 
   return (
     <header className="border-b border-line bg-panel">
-      <div className="mx-auto grid max-w-[1600px] gap-4 px-3 py-4 sm:px-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] lg:items-center">
-        <div className="flex items-center gap-3">
-          <ValkiriaLogo />
-          <div className="min-w-0">
-            <p className="text-lg font-semibold tracking-tight text-fg">
-              Valkiria <span className="font-normal text-muted">Fluidodinamica S.r.l.</span>
-            </p>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
-              <span className="inline-flex items-center gap-1">
-                <Factory aria-hidden className="size-3.5 text-amber" /> Portale Ordini B2B · Oleodinamica industriale
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Warehouse aria-hidden className="size-3.5 text-dim" /> Magazzini Bergamo (BG) · Brescia (BS)
-              </span>
-              <span className="num text-dim">P.IVA {SUPPLIER.vatNumber}</span>
-            </p>
-          </div>
+      <div className="mx-auto max-w-[1600px] px-3 sm:px-5">
+        <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between md:gap-6">
+          <Link href="/" className="flex min-w-0 items-center gap-2.5">
+            <ValkiriaLogo />
+            <span className="min-w-0 leading-tight">
+              <span className="block text-[15px] font-semibold tracking-tight text-fg">Valkiria Fluidodinamica</span>
+              <span className="block text-xs text-dim">Portale ordini · oleodinamica industriale</span>
+            </span>
+          </Link>
+          <CustomerSwitch />
         </div>
 
-        <dl
-          aria-label="Cliente attivo e condizioni contrattuali"
-          className="grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-line bg-line text-xs sm:grid-cols-4"
-        >
-          <div className="col-span-2 bg-ink px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-wider text-dim">Cliente · {ROLES[role].label}</dt>
-            <dd className="truncate font-medium text-fg">{company.legalName}</dd>
-            <dd className="num text-muted">
-              {company.vatNumber} · SDI {company.sdiRecipientCode}
-            </dd>
-          </div>
-          <div className="bg-ink px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-wider text-dim">Listino</dt>
-            <dd className="font-medium text-fg">{tier.label}</dd>
-            <dd className="num text-muted">
-              {tier.contractCode} · −{formatBp(tier.contractDiscountBp)}
-            </dd>
-          </div>
-          <div className="bg-ink px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-wider text-dim">Scaglioni volume</dt>
-            <dd className="num text-fg">
-              {tier.volumeTiers
-                .filter((t) => t.discountBp > 0)
-                .map((t) => `${t.label} −${formatBp(t.discountBp)}`)
-                .join(" · ")}
-            </dd>
-            <dd className="num text-muted">Franco destino ≥ {formatEUR(company.freeShippingThresholdCents)}</dd>
-          </div>
-        </dl>
+        <nav aria-label="Sezioni del portale" className="no-scrollbar -mx-3 flex items-center gap-5 overflow-x-auto px-3 text-sm sm:mx-0 sm:px-0">
+          {PRIMARY_NAV.map((l) => (
+            <Link key={l.href} href={l.href} className={linkClass(l.href)} aria-current={pathname === l.href ? "page" : undefined}>
+              {l.label}
+              {l.href === "/ordini" && orders > 0 && (
+                <span className="num rounded-full bg-fg px-1.5 text-[11px] font-medium leading-5 text-panel">{orders}</span>
+              )}
+            </Link>
+          ))}
+          <span aria-hidden className="ml-auto hidden md:block" />
+          {SECONDARY_NAV.map((l) => (
+            <Link key={l.href} href={l.href} className={linkClass(l.href, true)} aria-current={pathname === l.href ? "page" : undefined}>
+              {l.label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </header>
   );

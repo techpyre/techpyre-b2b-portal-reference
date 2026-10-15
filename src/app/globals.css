@@ -4,32 +4,33 @@
   --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, Menlo, monospace;
 
-  /* Industrial Swiss Precision */
-  --color-ink: #090a0f;
-  --color-panel: #11131a;
-  --color-panel-2: #161922;
-  --color-line: #222634;
-  --color-line-strong: #2e3345;
-  --color-fg: #e8eaf0;
-  --color-muted: #a3abbd;
-  --color-dim: #8b93a7;
-  --color-amber: #f97316;
-  --color-amber-soft: #fdba74;
-  --color-info: #3b82f6;
-  --color-info-soft: #93c5fd;
-  --color-ok: #34d399;
-  --color-warn: #fbbf24;
-  --color-danger: #f87171;
+  /* Portale: chiaro, sobrio, un solo colore d'azione */
+  --color-ink: #f3f4f6;
+  --color-panel: #ffffff;
+  --color-panel-2: #f7f8fa;
+  --color-line: #e2e5ea;
+  --color-line-strong: #c9ced7;
+  --color-fg: #14181f;
+  --color-muted: #4a5260;
+  --color-dim: #697180;
+  --color-amber: #c2410c;
+  --color-amber-soft: #9a3412;
+  --color-info: #1d4ed8;
+  --color-info-soft: #1e40af;
+  --color-ok: #047857;
+  --color-warn: #a16207;
+  --color-danger: #b91c1c;
 }
 
 @layer base {
   html {
     background-color: var(--color-ink);
     color: var(--color-fg);
-    color-scheme: dark;
+    color-scheme: light;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: clip;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -38,39 +39,83 @@
   }
 
   ::selection {
-    background: rgb(249 115 22 / 0.35);
-    color: #fff;
+    background: rgb(194 65 12 / 0.18);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-amber);
+    outline: 2px solid var(--color-info);
     outline-offset: 2px;
     border-radius: 2px;
   }
 
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {
-    opacity: 0.4;
+    display: none;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
   }
 }
 
 @layer components {
+  /* Numeri: sans con cifre tabulari (prezzi, quantità, giacenze) */
   .num {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum" 1, "zero" 1;
+    font-feature-settings: "tnum" 1;
   }
 
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, rgb(34 38 52 / 0.45) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(34 38 52 / 0.45) 1px, transparent 1px);
-    background-size: 24px 24px;
+  /* Codici articolo, ID tecnici */
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Ambito scuro: barra TechPYRE e blocchi di codice */
+  .dark-scope {
+    --color-ink: #0d1117;
+    --color-panel: #111827;
+    --color-panel-2: #1f2937;
+    --color-line: #263040;
+    --color-line-strong: #374151;
+    --color-fg: #e6e8ec;
+    --color-muted: #a8b0bd;
+    --color-dim: #8b94a3;
+    --color-amber: #fb923c;
+    --color-amber-soft: #fdba74;
+    --color-info: #60a5fa;
+    --color-info-soft: #93c5fd;
+    --color-ok: #34d399;
+    --color-warn: #fbbf24;
+    --color-danger: #f87171;
+    color-scheme: dark;
+    color: var(--color-fg);
   }
 
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #2e3345 transparent;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  /* La barra carrello fissa (sotto xl) non deve coprire il footer */
+  body:has(#cart-bar) footer {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 80rem) {
+    body:has(#cart-bar) footer {
+      padding-bottom: 0;
+    }
   }
 
   /* Tooltip permessi: visibile su hover e focus da tastiera */
@@ -96,7 +141,7 @@
   }
 
   .step-enter {
-    animation: step-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation: step-in 240ms ease-out both;
   }
 
   .pulse-dot {
@@ -111,7 +156,7 @@
 @keyframes step-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -131,7 +176,7 @@
 
 @keyframes flash {
   from {
-    background-color: rgb(249 115 22 / 0.18);
+    background-color: rgb(194 65 12 / 0.1);
   }
   to {
     background-color: transparent;

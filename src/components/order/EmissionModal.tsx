@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { CircleCheck, CircleX, LoaderCircle, Play, X } from "lucide-react";
 import type {
   ApiErrorResponse,
@@ -30,14 +31,14 @@ interface Step {
 }
 
 const STEP_DEFS: ReadonlyArray<Pick<Step, "id" | "title">> = [
-  { id: "policy", title: "Policy RBAC deny-by-default" },
-  { id: "server", title: "POST /api/v1/orders · ricalcolo server-side" },
-  { id: "stock", title: "Allocazione giacenze BG/BS" },
-  { id: "invoice", title: "Progressivo fattura e identificativo SDI" },
-  { id: "events", title: "Eventi checkout.session.completed + invoice.created" },
-  { id: "sign", title: "Firma Stripe-Signature HMAC SHA-256 (Web Crypto)" },
-  { id: "deliver", title: "Consegna a POST /api/webhooks/stripe" },
-  { id: "log", title: "Consumer idempotente e log webhook" },
+  { id: "policy", title: "Verifica permessi" },
+  { id: "server", title: "Ricalcolo sul server" },
+  { id: "stock", title: "Impegno giacenze" },
+  { id: "invoice", title: "Numerazione fattura" },
+  { id: "events", title: "Eventi di pagamento" },
+  { id: "sign", title: "Firma webhook" },
+  { id: "deliver", title: "Consegna webhook" },
+  { id: "log", title: "Registrazione" },
 ];
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
@@ -90,7 +91,7 @@ export function EmissionModal({ onClose }: { onClose: () => void }) {
       authorizeOrder(snapshot.role, snapshot.company, snapshot.paymentMethod, snapshot.vatRegime, snapshot.totals.lines.some((l) => l.quote.overrideDiscountBp > 0)),
     );
     if (!auth.ok) return fail("policy", `${auth.message} (${auth.permission})`);
-    update("policy", { status: "done", detail: `Ruolo «${ROLES[snapshot.role].shortLabel}»: order:submit e permessi di pagamento concessi` });
+    update("policy", { status: "done", detail: `Ruolo ${ROLES[snapshot.role].shortLabel} autorizzato (order:submit)` });
 
     const body: OrderRequestBody = {
       role: snapshot.role,
@@ -209,10 +210,10 @@ export function EmissionModal({ onClose }: { onClose: () => void }) {
   const payment = PAYMENT_METHODS.find((m) => m.id === effectivePayment);
   const shownTotals = result?.totals ?? totals;
   const tabs: Array<{ id: PayloadTab; label: string }> = [
-    { id: "session", label: "checkout.session.completed" },
-    { id: "invoice", label: "invoice.created" },
-    { id: "headers", label: "Header HTTP" },
-    { id: "server", label: "Risposta /api/v1/orders" },
+    { id: "session", label: "Pagamento" },
+    { id: "invoice", label: "Fattura" },
+    { id: "headers", label: "Header" },
+    { id: "server", label: "Risposta API" },
   ];
   const payloadText =
     tab === "session"
@@ -229,67 +230,59 @@ export function EmissionModal({ onClose }: { onClose: () => void }) {
               .join("\n\n");
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="emission-title"
-        className="flex max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden border border-line-strong bg-panel shadow-2xl shadow-black sm:max-h-[92vh] sm:rounded-sm"
+        className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-xl bg-panel shadow-2xl sm:max-h-[90vh] sm:rounded-lg"
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
-          <div>
-            <h2 id="emission-title" className="text-sm font-semibold text-fg">
-              Simulazione emissione ordine &amp; webhook Stripe
+          <div className="min-w-0">
+            <h2 id="emission-title" className="text-base font-semibold text-fg">
+              Invio ordine
             </h2>
-            <p className="num text-[11px] text-muted">
-              {company.legalName} · {company.vatNumber} · {payment?.label} · {effectiveVatRegime === "esente_art8" ? "N3.5 art. 8 c.1 lett. c)" : "IVA 22%"} ·{" "}
-              {formatEUR(shownTotals.grandTotalCents)}
+            <p className="truncate text-[13px] text-dim">
+              {company.legalName} · {payment?.label} · <span className="num font-medium text-fg">{formatEUR(shownTotals.grandTotalCents)}</span>
+              {effectiveVatRegime === "esente_art8" && " · esente art. 8"}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={phase === "running"}
-            className="rounded-sm p-1.5 text-muted hover:bg-panel-2 hover:text-fg disabled:opacity-40"
-            aria-label="Chiudi simulazione"
+            className="-mr-2 grid size-11 shrink-0 place-items-center rounded text-muted hover:bg-panel-2 hover:text-fg disabled:opacity-40"
+            aria-label="Chiudi"
           >
-            <X aria-hidden className="size-4" />
+            <X aria-hidden className="size-5" />
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:overflow-hidden">
+        <div className="grid min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:overflow-hidden">
           <div className="scrollbar-thin border-b border-line p-4 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-            <ol className="relative space-y-0" aria-live="polite">
+            <ol className="space-y-0" aria-live="polite">
               {steps.map((s, i) => (
                 <li key={s.id} className={`relative flex gap-3 pb-3 ${s.status !== "pending" ? "step-enter" : ""}`}>
                   {i < steps.length - 1 && (
-                    <span
-                      aria-hidden
-                      className={`absolute left-[9px] top-5 h-[calc(100%-12px)] w-px ${s.status === "done" ? "bg-amber/60" : "bg-line"}`}
-                    />
+                    <span aria-hidden className={`absolute left-[9px] top-5 h-[calc(100%-12px)] w-px ${s.status === "done" ? "bg-ok/50" : "bg-line"}`} />
                   )}
                   <span className="relative z-10 mt-0.5 flex size-[19px] shrink-0 items-center justify-center rounded-full bg-panel">
-                    {s.status === "done" && <CircleCheck aria-hidden className="size-[19px] text-amber" />}
+                    {s.status === "done" && <CircleCheck aria-hidden className="size-[19px] text-ok" />}
                     {s.status === "running" && <LoaderCircle aria-hidden className="size-[19px] animate-spin text-info" />}
                     {s.status === "error" && <CircleX aria-hidden className="size-[19px] text-danger" />}
                     {s.status === "pending" && <span aria-hidden className="size-2.5 rounded-full border border-line-strong" />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className={`flex items-baseline justify-between gap-2 text-xs font-medium ${s.status === "pending" ? "text-dim" : "text-fg"}`}>
-                      <span>
-                        <span className="num mr-1.5 text-dim">{String(i + 1).padStart(2, "0")}</span>
-                        {s.title}
-                      </span>
-                      {s.ms !== null && <span className="num shrink-0 text-[10px] text-dim">{s.ms} ms</span>}
+                    <p className={`flex items-baseline justify-between gap-2 text-sm ${s.status === "pending" ? "text-dim" : "font-medium text-fg"}`}>
+                      <span>{s.title}</span>
+                      {s.ms !== null && <span className="num shrink-0 text-xs font-normal text-dim">{s.ms} ms</span>}
                     </p>
-                    <p
-                      className={`num mt-0.5 break-all text-[11px] leading-snug ${
-                        s.status === "error" ? "text-danger" : s.status === "done" ? "text-muted" : "text-dim"
-                      }`}
-                    >
-                      <span className="sr-only">Stato: {s.status}. </span>
-                      {s.detail}
-                    </p>
+                    {s.status !== "pending" && (
+                      <p className={`mono mt-0.5 break-all text-[11px] leading-snug ${s.status === "error" ? "text-danger" : "text-dim"}`}>
+                        <span className="sr-only">Stato: {s.status}. </span>
+                        {s.detail}
+                      </p>
+                    )}
                   </div>
                 </li>
               ))}
@@ -300,32 +293,47 @@ export function EmissionModal({ onClose }: { onClose: () => void }) {
                 ref={startRef}
                 type="button"
                 onClick={run}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-sm bg-amber px-3 py-2.5 text-xs font-semibold text-ink hover:bg-amber-soft"
+                className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded bg-amber px-4 text-sm font-semibold text-white hover:bg-amber-soft"
               >
-                <Play aria-hidden className="size-3.5" /> Avvia pipeline ({totals.lines.length} righe · {formatEUR(totals.grandTotalCents)})
+                <Play aria-hidden className="size-4" /> Conferma e invia · <span className="num">{formatEUR(totals.grandTotalCents)}</span>
               </button>
             )}
             {phase === "done" && result && (
-              <div className="mt-2 rounded-sm border border-ok/40 bg-ok/10 p-3 text-xs text-fg">
+              <div className="mt-1 rounded border border-ok/30 bg-ok/5 p-3 text-sm text-fg">
                 <p className="font-medium">
-                  Ordine <span className="num text-amber-soft">{result.orderCode}</span> emesso.
+                  Ordine <span className="mono">{result.orderCode}</span> inviato.
                 </p>
-                <p className="mt-1 text-muted">
-                  Giacenze aggiornate nel catalogo, fattura <span className="num">{result.invoice.number}</span> e 2 eventi registrati: passa al
-                  ruolo «Amministrazione &amp; Contabilità» per consultare fatture, XML FatturaPA e log webhook (con replay idempotente).
+                <p className="mt-0.5 text-[13px] text-muted">
+                  Fattura <span className="num">{result.invoice.number}</span> in coda SDI. Fatture e webhook sono visibili al ruolo Amministrazione.
                 </p>
+                <div className="mt-3 flex gap-2">
+                  <Link
+                    href="/ordini"
+                    onClick={onClose}
+                    className="inline-flex h-10 items-center rounded bg-fg px-3.5 text-sm font-medium text-panel hover:bg-fg/90"
+                  >
+                    Vedi ordini
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="inline-flex h-10 items-center rounded border border-line-strong px-3.5 text-sm text-fg hover:border-fg"
+                  >
+                    Chiudi
+                  </button>
+                </div>
               </div>
             )}
             {phase === "error" && (
-              <p className="mt-2 rounded-sm border border-danger/40 bg-danger/10 p-3 text-xs text-danger">
-                Pipeline interrotta: nessuna modifica a giacenze, fatture o log. Chiudi e verifica i dati dell&apos;ordine.
+              <p className="mt-1 rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+                Invio interrotto: nessuna modifica a giacenze, fatture o log.
               </p>
             )}
           </div>
 
-          <div className="flex min-h-[320px] min-w-0 flex-col p-4 lg:min-h-0">
+          <div className="flex min-w-0 flex-col p-4 lg:min-h-0">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div role="tablist" aria-label="Payload generati" className="scrollbar-thin flex max-w-full overflow-x-auto rounded-sm border border-line-strong bg-ink p-0.5">
+              <div role="tablist" aria-label="Dettagli tecnici" className="no-scrollbar flex max-w-full overflow-x-auto rounded border border-line bg-panel-2 p-0.5">
                 {tabs.map((t) => (
                   <button
                     key={t.id}
@@ -335,7 +343,9 @@ export function EmissionModal({ onClose }: { onClose: () => void }) {
                     aria-selected={tab === t.id}
                     aria-controls="payload-panel"
                     onClick={() => setTab(t.id)}
-                    className={`num whitespace-nowrap rounded-[2px] px-2 py-1 text-[11px] ${tab === t.id ? "bg-panel-2 text-fg ring-1 ring-line-strong" : "text-muted hover:text-fg"}`}
+                    className={`h-8 whitespace-nowrap rounded-[3px] px-2.5 text-[13px] ${
+                      tab === t.id ? "bg-panel font-medium text-fg shadow-sm ring-1 ring-line-strong" : "text-muted hover:text-fg"
+                    }`}
                   >
                     {t.label}
                   </button>
@@ -345,10 +355,10 @@ export function EmissionModal({ onClose }: { onClose: () => void }) {
             </div>
             <div id="payload-panel" role="tabpanel" aria-labelledby={`payload-tab-${tab}`} className="min-h-0 flex-1">
               {payloadText ? (
-                <CodeBlock code={payloadText} language={tab === "headers" ? "text" : "json"} label={`Payload ${tab}`} className="h-full max-h-[60vh] lg:max-h-none" />
+                <CodeBlock code={payloadText} language={tab === "headers" ? "text" : "json"} label={`Payload ${tab}`} className="h-full max-h-[50vh] lg:max-h-none" />
               ) : (
-                <div className="grid-bg flex h-full min-h-[240px] items-center justify-center rounded-sm border border-dashed border-line p-6 text-center text-xs text-muted">
-                  I payload tipizzati compariranno qui durante l&apos;esecuzione della pipeline.
+                <div className="flex h-full min-h-[120px] items-center justify-center rounded border border-dashed border-line p-6 text-center text-[13px] text-dim lg:min-h-[240px]">
+                  Payload e risposte compaiono qui durante l&apos;invio.
                 </div>
               )}
             </div>

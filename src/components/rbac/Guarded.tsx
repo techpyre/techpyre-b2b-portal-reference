@@ -9,12 +9,12 @@ import { usePortal } from "@/components/PortalProvider";
 export function PermBadge({ permission, granted }: { permission: Permission; granted?: boolean }) {
   return (
     <span
-      className={`num inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] leading-none ${
+      className={`mono inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] leading-none ${
         granted === false
-          ? "border-danger/40 bg-danger/10 text-danger"
+          ? "border-danger/30 bg-danger/5 text-danger"
           : granted
-            ? "border-ok/30 bg-ok/10 text-ok"
-            : "border-line-strong bg-panel-2 text-muted"
+            ? "border-ok/30 bg-ok/5 text-ok"
+            : "border-line bg-panel-2 text-muted"
       }`}
     >
       {granted === false && <Lock aria-hidden className="size-2.5" />}
@@ -70,10 +70,10 @@ export function GuardedButton({
         {children}
       </button>
       {reason && (
-        <span role="tooltip" className="tip-body rounded-sm border border-line-strong bg-panel-2 px-2.5 py-2 text-left text-xs text-fg shadow-xl shadow-black/50">
+        <span role="tooltip" className="tip-body rounded border border-line bg-panel px-2.5 py-2 text-left text-xs text-fg shadow-lg">
           <span className="block font-medium">{reason}</span>
           {!allowed && (
-            <span className="mt-1.5 flex items-center gap-1.5 text-muted">
+            <span className="mt-1.5 flex items-center gap-1.5 text-dim">
               Richiede <PermBadge permission={permission} granted={false} />
             </span>
           )}

@@ -20,7 +20,7 @@ export function CodeBlock({
     <pre
       aria-label={label}
       tabIndex={0}
-      className={`scrollbar-thin num overflow-auto rounded-sm border border-line bg-ink p-3 text-[11.5px] leading-relaxed ${className}`}
+      className={`dark-scope scrollbar-thin mono overflow-auto rounded border border-line bg-ink p-3 text-xs leading-relaxed ${className}`}
     >
       <code>
         {tokens

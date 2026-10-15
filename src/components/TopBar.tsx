@@ -1,47 +1,51 @@
 "use client";
 
-import { ExternalLink, Layers } from "lucide-react";
+import { RotateCcw } from "lucide-react";
+import type { Role } from "@/types";
 import { GithubMark } from "@/components/GithubMark";
-import type { CompanyId } from "@/types";
-import { COMPANIES } from "@/data/companies";
 import { ROLE_ORDER, ROLES } from "@/lib/rbac";
 import { usePortal } from "@/components/PortalProvider";
 
 import { REPO_URL } from "@/lib/links";
 
-/** Barra TechPYRE persistente, distinta dall'header aziendale: controlli della sandbox. */
+/**
+ * Barra TechPYRE (controlli della demo), separata dall'header Valkiria.
+ * Una sola riga: select su mobile, controllo segmentato da md in su.
+ */
 export function TopBar() {
-  const { role, company, setRole, setCompany } = usePortal();
-  const canSwitch = ROLES[role].canSwitchCompany;
+  const { role, setRole, resetSandbox } = usePortal();
 
   return (
-    <div className="sticky top-0 z-40 border-b border-info/25 bg-[#0B1020]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0B1020]/85">
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-2 px-3 py-2 sm:px-5 lg:flex-row lg:items-center lg:gap-4">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <a
-            href="https://www.techpyre.eu"
-            className="flex shrink-0 items-center gap-1.5 text-sm font-semibold tracking-tight text-fg hover:text-info-soft"
-          >
-            <Layers aria-hidden className="size-4 text-info" />
-            Tech<span className="text-info-soft">PYRE</span>
-          </a>
-          <span className="hidden truncate rounded-sm border border-info/40 bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info-soft sm:inline">
-            TechPYRE Reference Architecture #1 — Live Interactive Sandbox
+    <div className="dark-scope border-b border-black bg-[#0d1117] text-[13px]">
+      <div className="mx-auto flex h-11 max-w-[1600px] items-center gap-3 px-3 sm:px-5">
+        <a href="https://www.techpyre.eu" className="flex shrink-0 items-center gap-2 font-semibold text-fg hover:text-info-soft">
+          <span aria-hidden className="grid size-5 place-items-center rounded-[3px] bg-info/20 text-[10px] font-bold text-info-soft">
+            T
           </span>
-          <span className="rounded-sm border border-info/40 bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info-soft sm:hidden">
-            Ref. Arch. #1 · Sandbox
+          <span>
+            TechPYRE<span className="hidden font-normal text-dim lg:inline"> · demo portale B2B</span>
           </span>
-        </div>
+        </a>
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 lg:justify-end">
-          <span id="role-switcher-label" className="text-[11px] font-medium uppercase tracking-wider text-dim">
-            RBAC &amp; Tier Switcher
-          </span>
-          <div
-            role="group"
-            aria-labelledby="role-switcher-label"
-            className="scrollbar-thin flex max-w-full overflow-x-auto rounded-sm border border-line-strong bg-ink p-0.5"
+        <span aria-hidden className="hidden h-4 w-px bg-line-strong sm:block" />
+
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <label htmlFor="role-select" className="shrink-0 text-dim">
+            Ruolo
+          </label>
+          <select
+            id="role-select"
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+            className="h-8 min-w-0 flex-1 rounded border border-line-strong bg-panel px-2 text-base text-fg md:hidden"
           >
+            {ROLE_ORDER.map((r) => (
+              <option key={r} value={r}>
+                {ROLES[r].shortLabel}
+              </option>
+            ))}
+          </select>
+          <div role="group" aria-label="Ruolo" className="hidden items-center gap-0.5 rounded border border-line bg-panel/60 p-0.5 md:flex">
             {ROLE_ORDER.map((r) => {
               const active = r === role;
               return (
@@ -51,53 +55,34 @@ export function TopBar() {
                   aria-pressed={active}
                   title={ROLES[r].description}
                   onClick={() => setRole(r)}
-                  className={`whitespace-nowrap rounded-[2px] px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    active ? "bg-amber text-ink" : "text-muted hover:bg-panel-2 hover:text-fg"
+                  className={`h-7 whitespace-nowrap rounded-[3px] px-2.5 transition-colors ${
+                    active ? "bg-panel-2 font-medium text-fg ring-1 ring-line-strong" : "text-muted hover:text-fg"
                   }`}
                 >
-                  <span className="hidden md:inline">{ROLES[r].label}</span>
-                  <span className="md:hidden">{ROLES[r].shortLabel}</span>
+                  {ROLES[r].shortLabel}
                 </button>
               );
             })}
           </div>
+        </div>
 
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="whitespace-nowrap">Cliente attivo</span>
-            <select
-              value={company.id}
-              disabled={!canSwitch}
-              onChange={(e) => setCompany(e.target.value as CompanyId)}
-              aria-describedby="company-hint"
-              className="num max-w-[13rem] rounded-sm border border-line-strong bg-ink px-2 py-1.5 text-xs text-fg disabled:opacity-70"
-            >
-              {(Object.keys(COMPANIES) as CompanyId[]).map((id) => (
-                <option key={id} value={id}>
-                  {COMPANIES[id].vatNumber} · {COMPANIES[id].legalName}
-                </option>
-              ))}
-            </select>
-            <span id="company-hint" className="sr-only">
-              {canSwitch
-                ? "Il ruolo corrente può operare per conto di più clienti."
-                : "Il ruolo corrente è vincolato alla propria partita IVA."}
-            </span>
-          </label>
-
-          <div className="flex items-center gap-1">
-            <a
-              href={REPO_URL}
-              className="inline-flex items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-muted hover:bg-panel-2 hover:text-fg"
-            >
-              <GithubMark /> GitHub
-            </a>
-            <a
-              href="https://www.techpyre.eu"
-              className="inline-flex items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-muted hover:bg-panel-2 hover:text-fg"
-            >
-              techpyre.eu <ExternalLink aria-hidden className="size-3" />
-            </a>
-          </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={resetSandbox}
+            title="Ripristina carrello, giacenze e ordini"
+            className="inline-flex h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-panel-2 hover:text-fg"
+          >
+            <RotateCcw aria-hidden className="size-3.5" />
+            <span className="sr-only sm:not-sr-only">Reset</span>
+          </button>
+          <a
+            href={REPO_URL}
+            className="hidden h-8 items-center gap-1.5 rounded px-2 text-muted hover:bg-panel-2 hover:text-fg sm:inline-flex"
+          >
+            <GithubMark /> <span className="hidden lg:inline">Codice</span>
+            <span className="sr-only lg:hidden">Codice sorgente su GitHub</span>
+          </a>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ShieldCheck, X } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import { can, PERMISSIONS, ROLE_ORDER, ROLE_PERMISSIONS, ROLES } from "@/lib/rbac";
 import { usePortal } from "@/components/PortalProvider";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -20,34 +20,31 @@ export function PolicyPanel() {
   const granted = ROLE_PERMISSIONS[role].size;
 
   return (
-    <section aria-labelledby="policy-title" className="rounded-sm border border-line bg-panel p-3">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 id="policy-title" className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <ShieldCheck aria-hidden className="size-4 text-amber" /> Policy RBAC attiva
+    <div className="grid gap-4">
+      <section aria-labelledby="policy-title" className="rounded-md border border-line bg-panel">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line px-4 py-3">
+          <h2 id="policy-title" className="text-base font-semibold text-fg">
+            Matrice permessi
           </h2>
-          <p className="text-xs text-muted">
-            Ruolo «{ROLES[role].label}»: <span className="num text-ok">{granted}</span> permessi concessi su{" "}
-            <span className="num">{PERMISSIONS.length}</span>. Tutto ciò che non è elencato è negato.
+          <p className="text-[13px] text-dim">
+            {ROLES[role].shortLabel}: <span className="num font-medium text-fg">{granted}</span> su <span className="num">{PERMISSIONS.length}</span>{" "}
+            permessi
           </p>
         </div>
-        <p className="num text-[11px] text-dim">type Permission = {PERMISSIONS.length} literal · Record&lt;Role, ReadonlySet&lt;Permission&gt;&gt;</p>
-      </div>
-
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="scrollbar-thin overflow-x-auto rounded-sm border border-line">
-          <table className="w-full min-w-[620px] text-xs">
+        <div className="scrollbar-thin overflow-x-auto">
+          <table className="w-full min-w-[540px] text-sm">
             <caption className="sr-only">Matrice dei permessi per ruolo</caption>
             <thead className="border-b border-line bg-panel-2">
               <tr>
-                <th scope="col" className="sticky left-0 bg-panel-2 px-2.5 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-dim">
+                <th scope="col" className="sticky left-0 z-10 bg-panel-2 px-4 py-2.5 text-left text-xs font-medium text-dim">
                   Permesso
                 </th>
                 {ROLE_ORDER.map((r) => (
                   <th
                     key={r}
                     scope="col"
-                    className={`px-2 py-2 text-center text-[10px] font-medium uppercase tracking-wider ${r === role ? "bg-amber/15 text-amber-soft" : "text-dim"}`}
+                    aria-current={r === role ? "true" : undefined}
+                    className={`px-2 py-2.5 text-center text-xs font-medium ${r === role ? "bg-amber/10 text-fg" : "text-dim"}`}
                   >
                     {ROLES[r].shortLabel}
                   </th>
@@ -56,19 +53,19 @@ export function PolicyPanel() {
             </thead>
             <tbody>
               {PERMISSIONS.map((p) => (
-                <tr key={p.id} className="border-b border-line/60">
-                  <th scope="row" className="sticky left-0 bg-panel px-2.5 py-1.5 text-left font-normal">
-                    <span className="num block text-[11px] text-fg">{p.id}</span>
-                    <span className="block text-[10.5px] text-dim">{p.label}</span>
+                <tr key={p.id} className="border-b border-line last:border-b-0">
+                  <th scope="row" className="sticky left-0 z-10 bg-panel px-4 py-2 text-left font-normal">
+                    <span className="block text-fg">{p.label}</span>
+                    <span className="mono block text-[11px] text-dim">{p.id}</span>
                   </th>
                   {ROLE_ORDER.map((r) => {
                     const ok = can(r, p.id);
                     return (
-                      <td key={r} className={`px-2 py-1.5 text-center ${r === role ? "bg-amber/[0.07]" : ""}`}>
+                      <td key={r} className={`px-2 py-2 text-center ${r === role ? "bg-amber/[0.05]" : ""}`}>
                         {ok ? (
-                          <Check aria-label="concesso" className="mx-auto size-3.5 text-ok" />
+                          <Check aria-label="concesso" className="mx-auto size-4 text-ok" />
                         ) : (
-                          <X aria-label="negato" className="mx-auto size-3.5 text-danger/70" />
+                          <Minus aria-label="negato" className="mx-auto size-4 text-line-strong" />
                         )}
                       </td>
                     );
@@ -78,22 +75,25 @@ export function PolicyPanel() {
             </tbody>
           </table>
         </div>
-        <div className="flex min-w-0 flex-col gap-3">
-          <CodeBlock code={POLICY_SNIPPET} language="text" label="Helper can() e verifica server-side" />
-          <ul className="grid gap-1 text-xs text-muted">
+      </section>
+
+      <details className="rounded-md border border-line bg-panel px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-fg">Come viene applicato</summary>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <ul className="grid content-start gap-2 text-sm text-muted">
             <li>
-              <span className="text-fg">Client:</span> la UI legge la stessa matrice per nascondere colonne e disabilitare azioni (solo UX).
+              <span className="font-medium text-fg">Interfaccia:</span> legge la stessa matrice per nascondere colonne e disabilitare azioni.
             </li>
             <li>
-              <span className="text-fg">Server:</span> i Route Handler rifiltrano i campi (costo, margine) e rispondono 403 alle azioni non
-              autorizzate: prova «Esegui richiesta live» su POST /api/v1/orders con il ruolo Amministrazione.
+              <span className="font-medium text-fg">Server:</span> le API rifiltrano costo e margine e rispondono 403 alle azioni non autorizzate.
             </li>
             <li>
-              <span className="text-fg">Produzione:</span> il ruolo deriva dalla sessione firmata (cookie httpOnly), mai da parametri del client.
+              <span className="font-medium text-fg">In produzione:</span> il ruolo arriva dalla sessione firmata, mai dal client.
             </li>
           </ul>
+          <CodeBlock code={POLICY_SNIPPET} language="text" label="Helper can() e verifica server-side" />
         </div>
-      </div>
-    </section>
+      </details>
+    </div>
   );
 }

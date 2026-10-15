@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { PortalProvider } from "@/components/PortalProvider";
+import { TopBar } from "@/components/TopBar";
+import { CompanyHeader } from "@/components/CompanyHeader";
+import { Footer } from "@/components/Footer";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,20 +21,21 @@ const jetbrains = JetBrains_Mono({
 });
 
 const SITE_URL = "https://b2b-demo.techpyre.eu";
-const TITLE = "Valkiria Fluidodinamica · Portale B2B — TechPYRE Reference Architecture #1";
+const TITLE = "Valkiria Fluidodinamica · Portale ordini B2B";
 const DESCRIPTION =
-  "Live sandbox di un portale ordini B2B per componenti oleodinamici: RBAC tipizzato, listini dinamici a scaglioni in centesimi interi, simulazione webhook Stripe firmati HMAC e fatturazione elettronica FatturaPA/SDI. Azienda fittizia, dati simulati.";
+  "Demo di un portale ordini B2B per componenti oleodinamici: listini a scaglioni, ruoli e permessi, pagamenti Stripe e fattura elettronica. Azienda e dati fittizi.";
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#090A0F",
-  colorScheme: "dark",
+  viewportFit: "cover",
+  themeColor: "#0d1117",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: TITLE,
+  title: { default: TITLE, template: "%s · Valkiria B2B" },
   description: DESCRIPTION,
   applicationName: "TechPYRE Reference Architecture #1",
   authors: [{ name: "Riccardo Granza", url: "https://www.techpyre.eu" }],
@@ -56,7 +61,23 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="it" className={`${inter.variable} ${jetbrains.variable}`}>
-      <body className="font-sans text-fg antialiased">{children}</body>
+      <body className="flex min-h-screen flex-col font-sans text-fg antialiased">
+        <a
+          href="#contenuto"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded focus:bg-fg focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-panel"
+        >
+          Vai al contenuto
+        </a>
+        {/* Il provider sta nel layout: carrello e ordini restano in memoria passando tra le pagine. */}
+        <PortalProvider>
+          <TopBar />
+          <CompanyHeader />
+          <div id="contenuto" className="flex-1">
+            {children}
+          </div>
+          <Footer />
+        </PortalProvider>
+      </body>
     </html>
   );
 }

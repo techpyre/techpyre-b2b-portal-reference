@@ -1,24 +1,14 @@
-import { PortalProvider } from "@/components/PortalProvider";
-import { TopBar } from "@/components/TopBar";
-import { CompanyHeader } from "@/components/CompanyHeader";
-import { Workspace } from "@/components/Workspace";
-import { Footer } from "@/components/Footer";
+import { CatalogPanel } from "@/components/catalog/CatalogPanel";
+import { CartPanel } from "@/components/cart/CartPanel";
 
 export default function Home() {
   return (
-    <>
-      <a
-        href="#contenuto"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-sm focus:bg-amber focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:text-ink"
-      >
-        Vai al contenuto
-      </a>
-      <PortalProvider>
-        <TopBar />
-        <CompanyHeader />
-        <Workspace />
-      </PortalProvider>
-      <Footer />
-    </>
+    <main className="mx-auto max-w-[1600px] px-3 pb-8 pt-4 sm:px-5">
+      <h1 className="sr-only">Catalogo e ordine rapido</h1>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
+        <CatalogPanel />
+        <CartPanel />
+      </div>
+    </main>
   );
 }

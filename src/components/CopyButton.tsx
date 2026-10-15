@@ -17,7 +17,7 @@ export function CopyButton({ text, label = "Copia JSON" }: { text: string; label
           setCopied(false);
         }
       }}
-      className="inline-flex items-center gap-1.5 rounded-sm border border-line-strong px-2 py-1 text-[11px] text-muted hover:border-amber hover:text-fg"
+      className="inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-2.5 text-xs text-muted hover:border-fg hover:text-fg"
     >
       {copied ? <Check aria-hidden className="size-3.5 text-ok" /> : <Copy aria-hidden className="size-3.5" />}
       <span aria-live="polite">{copied ? "Copiato" : label}</span>
