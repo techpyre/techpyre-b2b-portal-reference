@@ -26,8 +26,9 @@ export function commissionRateFor(marginBp: number): number {
 }
 
 function unitBeforeOverride(product: Product, tier: PriceListTier, quantity: number): number {
-  const contractUnit = applyDiscountBp(product.listPriceCents, tier.contractDiscountBp);
-  return applyDiscountBp(contractUnit, volumeTierFor(tier, quantity).discountBp);
+  const volumeTier = volumeTierFor(tier, quantity);
+  const factor = (1 - tier.contractDiscountBp / 10_000) * (1 - volumeTier.discountBp / 10_000);
+  return product.listPriceCents * factor;
 }
 
 /**
@@ -46,7 +47,13 @@ export function validateOverride(
   if (overrideDiscountBp > MAX_OVERRIDE_BP) {
     return { valid: false, reason: `Sconto extra oltre il tetto consentito (${MAX_OVERRIDE_BP / 100}%).` };
   }
-  const netUnitCents = applyDiscountBp(unitBeforeOverride(product, tier, quantity), overrideDiscountBp);
+  const volumeTier = volumeTierFor(tier, quantity);
+  const factor =
+    (1 - tier.contractDiscountBp / 10_000) *
+    (1 - volumeTier.discountBp / 10_000) *
+    (1 - overrideDiscountBp / 10_000);
+  const exactNetUnitCents = product.listPriceCents * factor;
+  const netUnitCents = Math.round(exactNetUnitCents);
   const marginBp = ratioBp(netUnitCents - product.industrialCostCents, netUnitCents);
   if (marginBp < MIN_MARGIN_BP) {
     return {
@@ -58,10 +65,12 @@ export function validateOverride(
 }
 
 /**
- * Pricing engine puro: listino → sconto contratto → scaglione volume → override agente.
- * Ogni passaggio è arrotondato al centesimo; i totali di riga sono `prezzo unitario × quantità`
- * per coerenza con il `PrezzoTotale` del tracciato FatturaPA.
- * Un override non valido viene ignorato (sconto extra = 0).
+ * Pricing engine B2B puro: sconti a cascata (composti).
+ * Moltiplicatore = (1 - scontoContratto) × (1 - scontoVolume) × (1 - scontoOverride).
+ * I prezzi unitari intermedi non subiscono arrotondamenti prematuri che falserebbero
+ * i totali di riga su quantitativi industriali (es. 60 pz × 5,202 € = 312,12 €).
+ * Il totale di riga è calcolato come `roundToCents(prezzoUnitarioEsatto × quantità)`
+ * in piena conformità con le specifiche tecniche FatturaPA SDI.
  */
 export function quote(
   product: Product,
@@ -74,9 +83,18 @@ export function quote(
   const contractUnitCents = applyDiscountBp(product.listPriceCents, tier.contractDiscountBp);
   const validation = requestedOverrideBp > 0 ? validateOverride(product, tier, qty, requestedOverrideBp) : null;
   const overrideDiscountBp = validation?.valid ? requestedOverrideBp : 0;
-  const netUnitCents = applyDiscountBp(applyDiscountBp(contractUnitCents, volumeTier.discountBp), overrideDiscountBp);
+
+  const compoundMultiplier =
+    (1 - tier.contractDiscountBp / 10_000) *
+    (1 - volumeTier.discountBp / 10_000) *
+    (1 - overrideDiscountBp / 10_000);
+  const compoundDiscountBp = Math.round((1 - compoundMultiplier) * 10_000);
+
+  const exactNetUnitPriceCents = product.listPriceCents * compoundMultiplier;
+  const netUnitCents = Math.round(exactNetUnitPriceCents);
   const lineListCents = product.listPriceCents * qty;
-  const lineNetCents = netUnitCents * qty;
+  const lineNetCents = Math.round(exactNetUnitPriceCents * qty);
+
   const marginBp = ratioBp(netUnitCents - product.industrialCostCents, netUnitCents);
   const commissionRateBp = commissionRateFor(marginBp);
 
@@ -89,6 +107,8 @@ export function quote(
     contractUnitCents,
     volumeTier,
     overrideDiscountBp,
+    compoundDiscountBp,
+    exactNetUnitPriceCents,
     netUnitCents,
     lineListCents,
     lineNetCents,

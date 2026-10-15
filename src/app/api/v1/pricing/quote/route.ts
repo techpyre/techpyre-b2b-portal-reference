@@ -41,6 +41,8 @@ export function GET(request: NextRequest): Response {
       contractDiscountBp: q.contractDiscountBp,
       contractUnitCents: q.contractUnitCents,
       volumeTier: { id: q.volumeTier.id, label: q.volumeTier.label, discountBp: q.volumeTier.discountBp },
+      compoundDiscountBp: q.compoundDiscountBp,
+      exactNetUnitPriceCents: q.exactNetUnitPriceCents,
       netUnitCents: q.netUnitCents,
       lineListCents: q.lineListCents,
       lineNetCents: q.lineNetCents,

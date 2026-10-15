@@ -153,6 +153,10 @@ export interface PriceQuote {
   volumeTier: VolumeTier;
   /** Sconto extra concesso dall'agente (override), già validato. */
   overrideDiscountBp: number;
+  /** Sconto a cascata totale combinato in basis point: (1 - (1-d1)*(1-d2)*(1-d3))*10000. */
+  compoundDiscountBp: number;
+  /** Prezzo unitario netto prima dell'arrotondamento di riga (fino a frazioni di centesimo). */
+  exactNetUnitPriceCents: number;
   netUnitCents: number;
   lineListCents: number;
   lineNetCents: number;

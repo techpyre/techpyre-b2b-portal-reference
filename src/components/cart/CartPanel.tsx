@@ -2,8 +2,8 @@
 
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
-import { ChevronUp, Lock, Send, ShoppingCart, Trash2, TriangleAlert, Truck, X } from "lucide-react";
-import { formatBp, formatEUR } from "@/lib/money";
+import { ChevronUp, Download, Lock, Printer, Send, ShoppingCart, Trash2, TriangleAlert, Truck, X } from "lucide-react";
+import { centsToDecimal, formatBp, formatEUR, formatUnitPrice } from "@/lib/money";
 import { can, deniedReason } from "@/lib/rbac";
 import { PAYMENT_METHODS } from "@/lib/orders";
 import { STAMP_DUTY_THRESHOLD_CENTS } from "@/lib/checkout";
@@ -59,6 +59,70 @@ export function CartPanel() {
 
   const blockedReason = lineCount === 0 ? "Carrello vuoto" : null;
   const rowsLabel = `${lineCount} ${lineCount === 1 ? "riga" : "righe"}`;
+
+  const exportCsv = () => {
+    if (totals.lines.length === 0) return;
+    const header = [
+      "Codice SKU",
+      "Descrizione Articolo",
+      "Quantità",
+      "Listino Unitario",
+      "Sconto Totale %",
+      "Prezzo Netto Unitario",
+      "Totale Riga Netto",
+      "Allocazione Magazzino",
+    ];
+
+    const csvRows: string[] = [header.map((h) => `"${h}"`).join(";")];
+
+    for (const { product, quote, allocation } of totals.lines) {
+      const allocText =
+        allocation.status === "single"
+          ? `BG ${allocation.fromBG} (Pronta consegna)`
+          : allocation.status === "split"
+          ? `BG ${allocation.fromBG} + BS ${allocation.fromBS} (${allocation.leadTimeDays} gg)`
+          : `BG ${allocation.fromBG} + BS ${allocation.fromBS} (${allocation.backorder} pz riordino, ${allocation.leadTimeDays} gg)`;
+
+      csvRows.push(
+        [
+          `"${product.sku}"`,
+          `"${product.name.replace(/"/g, '""')}"`,
+          quote.quantity,
+          `"${centsToDecimal(quote.listUnitCents)} €"`,
+          `"-${formatBp(quote.compoundDiscountBp)}"`,
+          `"${centsToDecimal(Math.round(quote.exactNetUnitPriceCents * 10) / 10)} €"`,
+          `"${centsToDecimal(quote.lineNetCents)} €"`,
+          `"${allocText}"`,
+        ].join(";")
+      );
+    }
+
+    csvRows.push("");
+    csvRows.push(`"Riepilogo Preventivo / Ordine";"";"";"";"";"";"";""`);
+    csvRows.push(`"Cliente: ${company.legalName} (P.IVA ${company.vatNumber})";"";"";"";"";"";"";""`);
+    csvRows.push(`"Totale Merce Listino";"";"";"";"";"";"${centsToDecimal(totals.listTotalCents)} €";""`);
+    csvRows.push(`"Totale Sconti";"";"";"";"";"";"-${centsToDecimal(totals.savingsCents)} €";""`);
+    csvRows.push(`"Imponibile Merce";"";"";"";"";"";"${centsToDecimal(totals.taxableGoodsCents)} €";""`);
+    csvRows.push(
+      `"Trasporto";"";"";"";"";"";"${totals.freeShipping ? "Gratuito" : centsToDecimal(totals.shippingCents) + " €"}";""`
+    );
+    csvRows.push(`"IVA";"";"";"";"";"";"${centsToDecimal(totals.vatCents)} €";""`);
+    if (totals.stampDutyCents > 0) {
+      csvRows.push(`"Imposta di Bollo";"";"";"";"";"";"${centsToDecimal(totals.stampDutyCents)} €";""`);
+    }
+    csvRows.push(`"TOTALE DOCUMENTO";"";"";"";"";"";"${centsToDecimal(totals.grandTotalCents)} €";""`);
+
+    const blob = new Blob(["\uFEFF" + csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `preventivo_valkiria_${company.id}_${dateStr}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <>
@@ -136,7 +200,7 @@ export function CartPanel() {
                         {product.name}
                       </p>
                       <p className="num text-xs text-dim">
-                        {quote.quantity} × {formatEUR(quote.netUnitCents)} · {quote.volumeTier.label}
+                        {quote.quantity} × {formatUnitPrice(quote.exactNetUnitPriceCents)} · {quote.volumeTier.label}
                         {quote.overrideDiscountBp > 0 && <span className="text-info"> · extra −{formatBp(quote.overrideDiscountBp)}</span>}
                       </p>
                     </div>
@@ -273,6 +337,29 @@ export function CartPanel() {
             <Send aria-hidden className="size-4" />
             Invia ordine
           </GuardedButton>
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={lineCount === 0}
+              className="flex h-9 items-center justify-center gap-1.5 rounded border border-line-strong bg-panel px-2 text-xs font-medium text-fg hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Scarica preventivo in formato CSV compatibile Excel / ERP"
+            >
+              <Download className="size-3.5 text-muted" />
+              Esporta CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={lineCount === 0}
+              className="flex h-9 items-center justify-center gap-1.5 rounded border border-line-strong bg-panel px-2 text-xs font-medium text-fg hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Stampa preventivo d'ordine"
+            >
+              <Printer className="size-3.5 text-muted" />
+              Stampa Preventivo
+            </button>
+          </div>
           {state.orders.length > 0 && (
             <p className="mt-2 text-center text-xs text-dim">
               {state.orders.length} {state.orders.length === 1 ? "ordine inviato" : "ordini inviati"} ·{" "}

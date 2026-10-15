@@ -205,6 +205,88 @@ export function ArchitecturePanel() {
         </ol>
       </section>
 
+      {/* Policy di Calcolo Prezzi B2B e Arrotondamento FatturaPA */}
+      <section aria-labelledby="pricing-policy-title" className="rounded-md border border-line bg-panel">
+        <div className="border-b border-line px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-amber/15 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-amber">
+              Regole Contabili ERP
+            </span>
+            <h2 id="pricing-policy-title" className="text-base font-semibold text-fg">
+              Policy di Calcolo Prezzi: Sconto a Cascata e Sub-Cent FatturaPA
+            </h2>
+          </div>
+          <p className="mt-1 text-[13px] text-dim">
+            Come il portale elimina gli errori di troncamento e garantisce la quadratura al centesimo con l&apos;Agenzia delle Entrate (SDI).
+          </p>
+        </div>
+
+        <div className="p-4 space-y-4 text-sm leading-relaxed text-muted">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded border border-line bg-panel-2 p-3.5 space-y-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-fg">
+                1. Sconto a Cascata (Compound Discount)
+              </h3>
+              <p className="text-xs text-muted">
+                Nel commercio B2B gli sconti non si sommano aritmeticamente, ma si applicano in cascata moltiplicando i coefficienti netti:
+              </p>
+              <div className="mono rounded bg-panel p-2.5 text-xs text-fg">
+                Moltiplicatore = (1 − scontoContratto) × (1 − scontoVolume) × (1 − scontoOverride)
+              </div>
+              <p className="text-xs text-dim">
+                Es. Contratto 10% + Scaglione 50+ pz al 15%: <br />
+                <span className="text-fg font-medium">(1 − 0,10) × (1 − 0,15) = 0,90 × 0,85 = 0,765 → Sconto combinato −23,5%</span> (non arrotondamenti arbitrari).
+              </p>
+            </div>
+
+            <div className="rounded border border-line bg-panel-2 p-3.5 space-y-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-fg">
+                2. Preservazione Sub-Cent e Totale Riga
+              </h3>
+              <p className="text-xs text-muted">
+                I prezzi unitari intermedi conservano la precisione a virgola mobile senza arrotondamenti prematuri ai 2 decimali:
+              </p>
+              <div className="mono rounded bg-panel p-2.5 text-xs text-fg">
+                totaleRigaCents = Math.round(prezzoUnitarioEsattoCents × quantita)
+              </div>
+              <p className="text-xs text-dim">
+                L&apos;arrotondamento (half-up) avviene <strong>una sola volta per riga d&apos;ordine</strong>, prevenendo il disallineamento nei lotti industriali.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded border border-line-strong bg-panel p-3.5 space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-fg">
+              Verifica Contabile Certificata: 60 pz di VLK-RAC-2353-12L
+            </h3>
+            <div className="grid gap-2 text-xs sm:grid-cols-4">
+              <div className="rounded bg-panel-2 p-2">
+                <span className="text-dim block">Listino Unitario</span>
+                <span className="num text-sm font-semibold text-fg">6,80 €</span>
+              </div>
+              <div className="rounded bg-panel-2 p-2">
+                <span className="text-dim block">Prezzo Netto Esatto</span>
+                <span className="num text-sm font-semibold text-fg">5,202 €</span>
+                <span className="text-[10px] text-dim block">6,80 × 0,765</span>
+              </div>
+              <div className="rounded bg-panel-2 p-2">
+                <span className="text-dim block">Totale Riga (60 pz)</span>
+                <span className="num text-sm font-semibold text-ok">312,12 €</span>
+                <span className="text-[10px] text-dim block">round(5,202 × 60)</span>
+              </div>
+              <div className="rounded bg-panel-2 p-2">
+                <span className="text-dim block">Risparmio Netto</span>
+                <span className="num text-sm font-semibold text-fg">95,88 €</span>
+                <span className="text-[10px] text-dim block">408,00 − 312,12</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-dim">
+              <strong>Nota tecnica SDI:</strong> Se il prezzo unitario fosse stato troncato o arrotondato a 5,20 €, il totale sarebbe risultato 312,00 €, generando una discrepanza di 0,12 € rispetto al calcolo del gestionale centrale e ai requisiti del tracciato XML FatturaPA (dove <code className="mono">&lt;PrezzoUnitario&gt;</code> ammette fino a 8 cifre decimali e <code className="mono">&lt;PrezzoTotale&gt;</code> è a 2 cifre).
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section aria-labelledby="api-title" className="rounded-md border border-line bg-panel">
         <div className="border-b border-line px-4 py-3">
           <h2 id="api-title" className="text-base font-semibold text-fg">

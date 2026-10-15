@@ -33,6 +33,17 @@ export function formatEUR(cents: number): string {
   return EUR.format(cents / 100);
 }
 
+/** Formatta un prezzo unitario conservando i 3 decimali per prezzi sub-cent (es. 5,202 €) tipici del B2B. */
+export function formatUnitPrice(cents: number): string {
+  const hasSubCent = Math.abs(cents - Math.round(cents)) > 0.0001;
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: hasSubCent ? 3 : 2,
+  }).format(cents / 100);
+}
+
 export function formatBp(bp: number): string {
   return `${PCT.format(bp / 100)}%`;
 }
